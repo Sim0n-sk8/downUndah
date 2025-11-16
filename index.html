@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crickey</title>
+
+    <!-- Leaflet.js for Live Map -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+
+    <style>
+      /* Australian Color Palette */
+      :root {
+        --aussie-green: #4f997d;
+        --aussie-cream: #ffe797;
+        --aussie-orange: #ffdfa7;
+        --aussie-red: #a72703;
+        --aussie-white: #ffffff;
+        --text-black: #000000;
+        --text-white: #ffffff;
+      }
+
+      /* Reset some default styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      /* Body styling */
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background-color: var(--aussie-green);
+        padding: 1rem;
+        overflow: hidden; /* Prevent scrollbars */
+      }
+
+      /* Main container */
+      .mainContainer {
+        width: 100%;
+        max-width: 400px;
+        background-color: var(--aussie-white);
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        padding: 2rem 1.5rem;
+        border: 2px solid var(--text-black);
+        z-index: 10;
+        position: relative;
+        transition: opacity 0.5s;
+      }
+      .mainContainer.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .mainContainer h1 {
+        text-align: center;
+        font-size: 1.8rem;
+        margin-bottom: 1.5rem;
+        color: var(--text-black);
+      }
+      .questionCard {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      .questionCard .question {
+        font-size: 1.3rem;
+        color: var(--text-black);
+        text-align: center;
+      }
+      .optionsContainer {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+      }
+      .optionBtn {
+        padding: 0.8rem;
+        font-size: 1rem;
+        border: 2px solid var(--text-black);
+        border-radius: 8px;
+        background-color: var(--aussie-orange);
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        color: var(--text-black);
+        font-weight: 500;
+      }
+      .optionBtn:hover {
+        background-color: var(--aussie-cream);
+      }
+      .feedbackContainer {
+        text-align: center;
+        font-weight: bold;
+        font-size: 1rem;
+        min-height: 1.2rem;
+        color: var(--aussie-green);
+      }
+      .feedbackContainer.incorrect {
+        color: var(--aussie-red);
+      }
+
+      /* --- Blackout and Map Styles --- */
+      #blackout {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: black;
+        opacity: 0;
+        visibility: hidden;
+        z-index: 1000;
+        transition: opacity 0.5s ease-in-out, visibility 0.5s ease-in-out;
+      }
+      #blackout.active {
+        opacity: 1;
+        visibility: visible;
+      }
+      #map-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1001;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.5s 0.5s, visibility 0.5s 0.5s;
+      }
+      #map-container.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+      #wrong-x {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 25rem;
+        color: red;
+        font-weight: bold;
+        display: none;
+        z-index: 1002;
+        -webkit-text-stroke: 4px white;
+        text-shadow: 0 0 20px black;
+      }
+      
+      /* --- Green Overlay Visual Feedback --- */
+      #green-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 255, 64, 0.39); /* Semi-transparent green */
+        z-index: 1050; /* Above map, below animals */
+        opacity: 0;
+        transition: opacity 1.5s ease-in-out;
+        pointer-events: none;
+      }
+      #green-overlay.visible {
+        opacity: 1;
+      }
+
+      /* --- Animal CSS --- */
+      .animal-animation {
+        position: fixed;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 1100;
+        transition: opacity 1s ease-in-out;
+      }
+      
+      /* Kangaroo */
+      #kangaroo {
+        left: 60%;
+        bottom: -200px;
+        transform: translateX(-50%) scale(0.7) rotate(10deg);
+        width: 220px;
+        transition: transform 0.5s cubic-bezier(0.23, 1.25, 0.32, 1.4), 
+                    bottom 0.5s cubic-bezier(0.23, 1.25, 0.32, 1.4), 
+                    right 0.5s cubic-bezier(0.23, 1.25, 0.32, 1.4), 
+                    opacity 1s ease-in-out;
+      }
+      #kangaroo.show {
+        bottom: 400px;
+        right: -20px;
+        transform: translateX(-50%) scale(1.3) rotate(-5deg);
+        animation: bounceChaos 0.8s ease-in-out;
+      }
+      @keyframes bounceChaos {
+        0% { transform: translateX(-50%) scale(1.2) rotate(-5deg); }
+        50% { transform: translateX(-50%) scale(1.25) rotate(5deg); }
+        100% { transform: translateX(-50%) scale(1.2) rotate(-3deg); }
+      }
+
+      /* Koala */
+      #koala {
+        bottom: -300px;
+        right: -300px;
+        width: 260px;
+        transform: rotate(0deg) scale(0.6);
+        z-index: 1200;
+        transition: none; /* Animation handles transition */
+      }
+      #koala.show {
+        animation: chaosKoala 1.8s linear forwards;
+      }
+      /* FIXED: Removed opacity from keyframes */
+      @keyframes chaosKoala {
+        0% { bottom: -30%; right: -30%; transform: rotate(0deg) scale(0.6); }
+        100% { bottom: 45%; left: 0; right: auto; transform: rotate(60deg) scale(1.3); }
+      }
+      
+      /* Irwin */
+      #irwin {
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100%;
+        max-width: 500px;
+        z-index: 2900;
+      }
+      /* Irwin's .show class is only used as a JS flag now, opacity handles the effect */
+
+      /* Emu */
+      #emu {
+        top: -200px;
+        left: -150px;
+        width: 300px;
+        transform: rotate(-25deg);
+        transition: all 0.8s ease-out 0.2s;
+      }
+      #emu.show {
+        top: -50px;
+        left: -40px;
+      }
+
+      /* Wombat */
+      #wombat {
+        bottom: 50px;
+        right: -250px;
+        width: 250px;
+        transition: all 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) 0.4s;
+        z-index: 2000;
+      }
+      #wombat.show {
+        bottom: 120px;
+        right: -30px;
+        transform: rotate(360deg);
+      }
+    </style>
+  </head>
+  <body>
+  <div class="mainContainer" id="mainContainer">
+    <h1>Get to know Australia</h1>
+    <div class="questionCard">
+      <h2 class="question">Which landmark is the world's largest living structure, visible from space?</h2>
+      <div class="optionsContainer">
+        <button class="optionBtn" data-answer="false">Uluru (Ayers Rock)</button>
+        <button class="optionBtn" id="optionCorrect" data-answer="true">The Great Barrier Reef</button>
+        <button class="optionBtn" data-answer="false">Sydney Opera House</button>
+        <button class="optionBtn" data-answer="false">The Dingo Fence</button>
+        <button class="optionBtn" data-answer="false">Kakadu National Park</button>
+      </div>
+      <div class="feedbackContainer" id="feedback"></div>
+    </div>
+</div>
+
+    <!-- Live Map and Animation Elements -->
+    <div id="blackout"></div>
+    <div id="map-container">
+      <div id="green-overlay"></div>
+      <div id="map"></div>
+    </div>
+    <div id="wrong-x">X</div>
+    <img src="assets/kangroooo.png" alt="Kangaroo" class="animal-animation" id="kangaroo" />
+    <img src="assets/stevey.png" alt="Koala" class="animal-animation" id="koala" />
+    <img src="assets/irwin.png" alt="Irwin" class="animal-animation" id="irwin" />
+    <img src="assets/cat.gif" alt="Emu" class="animal-animation" id="emu" />
+    <img src="assets/wow.gif" alt="Wombat" class="animal-animation" id="wombat" />
+
+    <!-- Audio Elements -->
+    <audio id="song-sa" src="assets/sa.mp3"></audio>
+    <audio id="song-netherlands" src="assets/neth.mp3"></audio>
+    <audio id="song-america" src="assets/usa.mp3"></audio>
+    <audio id="song-australia" src="assets/MAW.mp3"></audio>
+  </body>
+
+  <script>
+    // --- Element References ---
+    const mainContainer = document.getElementById("mainContainer");
+    const buttons = document.querySelectorAll(".optionBtn");
+    const feedback = document.getElementById("feedback");
+    const blackout = document.getElementById("blackout");
+    const mapContainer = document.getElementById("map-container");
+    const greenOverlay = document.getElementById("green-overlay");
+    const wrongX = document.getElementById("wrong-x");
+    const kangaroo = document.getElementById("kangaroo");
+    const koala = document.getElementById("koala");
+    const irwin = document.getElementById("irwin");
+    const emu = document.getElementById("emu");
+    const wombat = document.getElementById("wombat");
+
+    const songs = {
+      sa: document.getElementById("song-sa"),
+      netherlands: document.getElementById("song-netherlands"),
+      america: document.getElementById("song-america"),
+      australia: document.getElementById("song-australia"),
+    };
+
+    let map = null;
+    let flightPathLayers = [];
+    const locations = {
+      southAfrica: { lat: -30.5595, lng: 22.9375, zoom: 4 },
+      netherlands: { lat: 52.1326, lng: 5.2913, zoom: 6 },
+      america: { lat: 39.8283, lng: -98.5795, zoom: 4 },
+      australia: { lat: -25.2744, lng: 133.7751, zoom: 4 },
+    };
+
+    function initializeMap() {
+      if (!map) {
+        map = L.map("map").setView([0, 0], 2);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(map);
+      }
+    }
+
+    function stopAllSongs() {
+      Object.values(songs).forEach((song) => { song.pause(); song.currentTime = 0; });
+    }
+
+    function resetAnimations() {
+      [kangaroo, koala, irwin, emu, wombat].forEach(el => {
+        el.classList.remove("show");
+        el.style.opacity = '0';
+      });
+      greenOverlay.classList.remove("visible");
+      flightPathLayers.forEach(layer => map.removeLayer(layer));
+      flightPathLayers = [];
+    }
+
+    function playSequence() {
+      mainContainer.classList.add("hidden");
+      blackout.classList.add("active");
+
+      const saDuration = 8000;
+      const netherlandsDuration = 10000;
+      const americaDuration = 10000;
+      const saStart = 1500;
+      const netherlandsStart = saStart + saDuration;
+      const americaStart = netherlandsStart + netherlandsDuration;
+      const australiaStart = americaStart + americaDuration;
+      
+      resetAnimations(); // Start fresh
+
+      setTimeout(() => { initializeMap(); mapContainer.classList.add("visible"); }, 500);
+
+      // --- South Africa ---
+      setTimeout(() => {
+        map.flyTo([locations.southAfrica.lat, locations.southAfrica.lng], locations.southAfrica.zoom);
+        songs.sa.play();
+      }, saStart);
+
+      // --- Netherlands ---
+      setTimeout(() => {
+        stopAllSongs();
+        map.flyTo([locations.netherlands.lat, locations.netherlands.lng], locations.netherlands.zoom);
+        songs.netherlands.play();
+        const line1 = L.polyline([[locations.southAfrica.lat, locations.southAfrica.lng], [locations.netherlands.lat, locations.netherlands.lng]], { color: 'black', weight: 3, dashArray: '5, 10' }).addTo(map);
+        flightPathLayers.push(line1);
+
+        // **FADE-IN LEVEL 1**
+        koala.classList.add('show');
+        kangaroo.classList.add('show');
+        // We set the opacity *after* adding the class to override animation opacity.
+        koala.style.opacity = '0.25';
+        kangaroo.style.opacity = '0.25';
+      }, netherlandsStart);
+      
+      setTimeout(() => { wrongX.style.display = "block"; }, netherlandsStart + netherlandsDuration - 1000);
+
+      // --- America ---
+      setTimeout(() => {
+        stopAllSongs();
+        wrongX.style.display = "none";
+        map.flyTo([locations.america.lat, locations.america.lng], locations.america.zoom);
+        songs.america.play();
+        const line2 = L.polyline([[locations.netherlands.lat, locations.netherlands.lng], [locations.america.lat, locations.america.lng]], { color: 'black', weight: 3, dashArray: '5, 10' }).addTo(map);
+        flightPathLayers.push(line2);
+
+        // **FADE-IN LEVEL 2**
+        koala.style.opacity = '0.6';
+        kangaroo.style.opacity = '0.6';
+        
+        irwin.style.opacity = '0.25';
+      }, americaStart);
+
+      setTimeout(() => { wrongX.style.display = "block"; }, americaStart + americaDuration - 1000);
+
+      // --- Australia ---
+      setTimeout(() => {
+        stopAllSongs();
+        wrongX.style.display = "none";
+        map.flyTo([locations.australia.lat, locations.australia.lng], locations.australia.zoom);
+        songs.australia.play();
+        const line3 = L.polyline([[locations.america.lat, locations.america.lng], [locations.australia.lat, locations.australia.lng]], { color: 'black', weight: 3, dashArray: '5, 10' }).addTo(map);
+        flightPathLayers.push(line3);
+
+        // **FADE-IN LEVEL 3 (FULL)**
+        emu.classList.add('show');
+        wombat.classList.add('show');
+        [kangaroo, koala, irwin, emu, wombat].forEach(el => el.style.opacity = '1');
+
+        // **SHOW GREEN OVERLAY**
+        greenOverlay.classList.add("visible");
+      }, australiaStart);
+    }
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (mapContainer.classList.contains("visible")) return;
+        if (btn.dataset.answer === "true") {
+          feedback.textContent = "Correct!";
+          feedback.classList.remove("incorrect");
+          playSequence();
+        } else {
+          btn.style.backgroundColor = "var(--aussie-red)";
+          btn.style.color = "var(--aussie-white)";
+          feedback.textContent = "Try again!";
+          feedback.classList.add("incorrect");
+          setTimeout(() => {
+            btn.style.backgroundColor = "";
+            btn.style.color = "";
+          }, 1000);
+        }
+      });
+    });
+
+    songs.australia.addEventListener("ended", () => {
+      mapContainer.classList.remove("visible");
+      blackout.classList.remove("active");
+      setTimeout(() => {
+        mainContainer.classList.remove("hidden");
+        resetAnimations();
+        stopAllSongs();
+      }, 1000);
+    });
+  </script>
+</html>
