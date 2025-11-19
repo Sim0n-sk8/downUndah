@@ -326,6 +326,28 @@
       australia: document.getElementById("song-australia"),
     };
 
+    // --- FIX START ---
+    // Flag to ensure we only unlock audio once.
+    let audioUnlocked = false;
+
+    // This function "unlocks" all audio files for playback on iOS.
+    // It should be called by the first user interaction (a click or tap).
+    function unlockAllAudio() {
+      if (audioUnlocked) return; // Exit if we've already done this.
+
+      // For each song, play and immediately pause it.
+      // This is silent to the user but tells the browser the user has approved playback.
+      Object.values(songs).forEach((song) => {
+        song.play();
+        song.pause();
+        song.currentTime = 0;
+      });
+
+      audioUnlocked = true;
+      console.log("All audio tracks unlocked for playback.");
+    }
+    // --- FIX END ---
+
     let map = null;
     let flightPathLayers = [];
     const locations = {
@@ -437,6 +459,9 @@
 
     buttons.forEach((btn) => {
       btn.addEventListener("click", () => {
+        // --- FIX: Call the unlock function on the very first click. ---
+        unlockAllAudio();
+
         if (mapContainer.classList.contains("visible")) return;
         if (btn.dataset.answer === "true") {
           feedback.textContent = "Correct!";
